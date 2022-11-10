@@ -1,58 +1,109 @@
-//omokGame.ts
 import { Omok } from './omok';
+import * as Game from './omok_game_system';
 import * as readline from 'readline';
 
-class GameOwner {
-    private readonly whitePlayer: number = 1;
-    private readonly blackPlayer: number = 2;
-    private ownerPlayer: number;
-
-    constructor() {
-        this.ownerPlayer = this.whitePlayer;
-    }
-
-    get owner() { return this.ownerPlayer; }
-
-    changeOwner() {
-        return this.ownerPlayer =
-            this.ownerPlayer === this.whitePlayer ?
-                this.blackPlayer : this.whitePlayer;
-    }
+async function run(): Promise<void> {
+    const omokGameObject = initGame();
+    await playGame(
+        omokGameObject.omok, omokGameObject.game, omokGameObject.readLine);
+    endGame(omokGameObject.readLine);
 }
-async function playGame() {
 
+function initGame(): {
+    omok: Omok;
+    game: Game.OmokGameSystem;
+    readLine: readline.Interface;
+} {
+    const omok = new Omok(4);
+    const game = new Game.OmokGameSystem();
     const readLine = readline.createInterface({
         input: process.stdin,
         output: process.stdout
     });
+    formatToConsoleOmokBoard(omok);
 
-    let inputStr = '';
-    const omok = new Omok(15);
-    const game = new GameOwner();
+    return { omok, game, readLine };
+}
 
-    while (inputStr !== 'q') {
+async function playGame(
+    omok: Omok, game: Game.OmokGameSystem, readLine: readline.Interface)
+    : Promise<void> {
+    while (game.state !== Game.State.GAMEOVER) {
         try {
-            inputStr = await input(readLine);
+            const inputStr = await input(readLine, game);
             update(inputStr, omok, game);
-            render(omok);
+            render(omok, game);
         } catch (error) {
             console.log(error + ": 잘못된 입력입니다");
         }
     }
-
-    process.exit(1);
 }
 
-function input(readLine: readline.Interface) {
-    let questionText = '';
+function endGame(readLine: readline.Interface) {
+    readLine.close();
+}
 
-    questionText = '좌표를 입력해주세요(ex: x y) ';
+function input(readLine: readline.Interface, game: Game.OmokGameSystem)
+    : Promise<string> {
+    switch (game.state) {
+        case Game.State.GAEMRESTART_CHECK:
+            return inputToGameRestartCheck(readLine, game);
+
+        default:
+            return inputToGamePlay(readLine, game);
+    }
+}
+
+function update(inputStr: string, omok: Omok, game: Game.OmokGameSystem): void {
+    switch (game.state) {
+        case Game.State.GAEMRESTART_CHECK:
+            gameRestartOrEnd(inputStr, omok, game);
+            break;
+
+        default: //gameplay
+            gamePlayUpdate(inputStr, omok, game);
+            break;
+    }
+}
+
+function render(omok: Omok, game: Game.OmokGameSystem): void {
+    switch (game.state) {
+        case Game.State.GAMEOVER:
+            console.log('오목 게임이 완전히 종료되었습니다.');
+            break;
+
+        default: //gameplay
+            formatToConsoleOmokBoard(omok);
+            printGameMessage(game);
+    }
+}
+
+function inputToGameRestartCheck(
+    readLine: readline.Interface, game: Game.OmokGameSystem): Promise<string> {
+    const questionText = '게임이 종료되었습니다. 다시 시작하시겠습니까? (y/n)';
 
     return new Promise<string>((resolve, reject) => {
         readLine.question(questionText, function (inputStr) {
-            if (inputStr === 'q') {
+            if (inputStr.match(/[^yn]/)) {
+                reject(inputStr);
+            } else if (inputStr.length !== 1) {
+            } else {
                 resolve(inputStr);
-            } else if (inputStr.match(/[^0-9\s]/)) {
+            }
+        });
+    })
+}
+
+function inputToGamePlay(
+    readLine: readline.Interface, game: Game.OmokGameSystem)
+    : Promise<string> {
+    const questionText = (game.owner === Game.Player.BLACK ?
+        '검은 돌 차례입니다.' : '흰 돌 차례입니다.') +
+        '\n좌표를 입력해주세요 (x y) ';
+
+    return new Promise<string>((resolve, reject) => {
+        readLine.question(questionText, function (inputStr) {
+            if (inputStr.match(/[^0-9\s]/)) {
                 reject(inputStr);
             } else if (inputStr.split(' ').length !== 2) {
                 reject(inputStr);
@@ -63,7 +114,19 @@ function input(readLine: readline.Interface) {
     })
 }
 
-function update(inputStr: string, omok: Omok, game: GameOwner) {
+
+
+function gameRestartOrEnd(inputStr: string, omok: Omok, game: Game.OmokGameSystem): void {
+    if (inputStr === 'n') {
+        game.state = Game.State.GAMEOVER;
+    } else {
+        game.state = Game.State.GAMEPLAY;
+        omok.initialize(omok.board.length);
+    }
+}
+
+function gamePlayUpdate(inputStr: string, omok: Omok, game: Game.OmokGameSystem)
+    : void {
     const position = inputStr.split(' ', 2)
         .map((item) => { return parseInt(item); });
 
@@ -72,22 +135,41 @@ function update(inputStr: string, omok: Omok, game: GameOwner) {
 
     if (omok.canPutStoneOnBoard(x, y)) {
         omok.putStoneOnBoard(x, y, game.owner);
-        game.changeOwner();
-        if (omok.isCompletedGameEndCondition(x, y)) {
-            console.log("오목입니다!");
-        }
+        gameSystemUpdate(Game.PlayResult.SUCCESS, omok, game, x, y);
     } else {
-        console.log("해당 자리에는 둘 수 없습니다!");
+        gameSystemUpdate(Game.PlayResult.FAIL, omok, game, x, y);
     }
 }
 
-function render(omok: Omok) {
+function gameSystemUpdate(
+    result: Game.PlayResult,
+    omok: Omok,
+    game: Game.OmokGameSystem,
+    xpos: number,
+    ypos: number): void {
+    if (omok.isOmok(xpos, ypos)) {
+        game.result = Game.PlayResult.OMOK;
+        game.winner = game.owner;
+        game.state = Game.State.GAEMRESTART_CHECK;
+    } else if (omok.isFilledFullBoard()) {
+        game.result = Game.PlayResult.DRAW;
+        game.state = Game.State.GAEMRESTART_CHECK;
+    } else {
+        game.result = result;
+    }
+
+    if (game.result !== Game.PlayResult.FAIL) {
+        game.flipOwner();
+    }
+}
+
+function formatToConsoleOmokBoard(omok: Omok): void {
     let omokConsoleBoard: string[] = [];
     for (let i = 0; i < omok.board.length; i++) {
         let boardLine: string = '';
         for (let j = 0; j < omok.board.length; j++) {
             if (omok.board[i][j] > 0) {
-                boardLine += getStoneSymbol(omok.board[i][j]);
+                boardLine += getPlayerStoneSymbol(omok.board[i][j]);
             } else {
                 boardLine += getLineSymbol(j, i, omok.board.length - 1);
             }
@@ -104,11 +186,11 @@ function render(omok: Omok) {
     }
 }
 
-function getStoneSymbol(stone: number) {
-    return stone === 1 ? '○' : '●';
+function getPlayerStoneSymbol(player: Game.Player): string {
+    return player === Game.Player.BLACK ? '○' : '●';
 }
 
-function getLineSymbol(xpos: number, ypos: number, length: number) {
+function getLineSymbol(xpos: number, ypos: number, length: number): string {
     if (ypos === 0) {
         if (xpos === 0) {
             return '┌';
@@ -136,4 +218,27 @@ function getLineSymbol(xpos: number, ypos: number, length: number) {
     }
 }
 
-playGame();
+function printGameMessage(game: Game.OmokGameSystem): void {
+    switch (game.result) {
+        case Game.PlayResult.SUCCESS:
+            break;
+
+        case Game.PlayResult.FAIL:
+            console.log('잘못된 값을 입력하였습니다.');
+            break;
+
+        case Game.PlayResult.OMOK:
+            console.log('오목입니다!');
+            const winnerPlayer =
+                game.winner === Game.Player.BLACK ? '검은 돌' : '흰 돌';
+            console.log('승자는 \'' + winnerPlayer + '\' 입니다!');
+            break;
+
+        case Game.PlayResult.DRAW:
+            console.log('더 이상 게임을 진행할 수 없습니다.');
+            console.log('비겼습니다!');
+            break;
+    }
+}
+
+run();
