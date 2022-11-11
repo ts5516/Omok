@@ -1,5 +1,3 @@
-import { hasOnlyExpressionInitializer } from "typescript";
-
 export enum State {
     GAMEPLAY,
     GAMEOVER,
