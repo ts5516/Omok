@@ -1,3 +1,5 @@
+import { hasOnlyExpressionInitializer } from "typescript";
+
 export enum State {
     GAMEPLAY,
     GAMEOVER,
@@ -30,6 +32,13 @@ export class OmokGameSystem {
         this.winnerPlayer = Player.NONE;
     }
 
+    initialize() {
+        this.gameState = State.GAMEPLAY;
+        this.ownerPlayer = Player.BLACK;
+        this.playResult = PlayResult.SUCCESS;
+        this.winnerPlayer = Player.NONE;
+    }
+
     get owner() { return this.ownerPlayer; }
     get state() { return this.gameState; }
     get result() { return this.playResult; }
@@ -40,6 +49,7 @@ export class OmokGameSystem {
     set winner(winnerPlayer: Player) { this.winnerPlayer = winnerPlayer; }
 
     flipOwner() {
+
         return this.ownerPlayer =
             this.ownerPlayer === Player.WHITE ? Player.BLACK : Player.WHITE;
     }

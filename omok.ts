@@ -1,13 +1,21 @@
-import { isInterfaceDeclaration } from "typescript";
+export enum Stone {
+    BLACK = 1,
+    WHITE = 2
+}
 
-class Omok {
-    readonly blackStone: number = 1;
-    readonly whiteStone: number = 2;
+export class Omok {
     readonly board: number[][] = [];
-    private numOfStonePutOnBoard: number = 0;
-
+    private numOfStonePutOnBoard: number;
+    private nowStone: Stone;
     constructor(boardSize: number) {
-        this.initialize(boardSize);
+        for (let i = 0; i < boardSize; i++) {
+            this.board[i] = [];
+            for (let j = 0; j < boardSize; j++) {
+                this.board[i][j] = 0;
+            }
+        }
+        this.numOfStonePutOnBoard = 0;
+        this.nowStone = Stone.BLACK;
     }
 
     initialize(boardSize: number): void {
@@ -18,11 +26,17 @@ class Omok {
             }
         }
         this.numOfStonePutOnBoard = 0;
+        this.nowStone = Stone.BLACK;
     }
 
-    putStoneOnBoard(xpos: number, ypos: number, stone: number): void {
-        this.board[ypos][xpos] = stone;
+    putStoneOnBoard(xpos: number, ypos: number): void {
+        this.board[ypos][xpos] = this.nowStone;
         this.numOfStonePutOnBoard++;
+    }
+
+    flipStone(): void {
+        this.nowStone =
+            this.nowStone === Stone.BLACK ? Stone.WHITE : Stone.BLACK;
     }
 
     canPutStoneOnBoard(xpos: number, ypos: number): boolean {
@@ -46,7 +60,10 @@ class Omok {
     }
 
     private isOverOmok(xpos: number, ypos: number): boolean {
-        return this.getMaxNumOfConsecutiveStone(xpos, ypos) > 5;
+        this.board[ypos][xpos] = this.nowStone;
+        const overOmokNum = this.getMaxNumOfConsecutiveStone(xpos, ypos);
+        this.board[ypos][xpos] = 0;
+        return overOmokNum > 5;
     }
 
     isFilledFullBoard(): boolean {
@@ -169,12 +186,16 @@ class Omok {
 
     private getBetweenTwoPos(start: number, end: number): number[] {
         let arr = [];
-        for (let i = Math.min(start, end); i <= Math.max(start, end); i++) {
-            arr.push(i);
+        if (start > end) {
+            for (let i = start; i >= end; i--) {
+                arr.push(i);
+            }
+        } else {
+            for (let i = start; i <= end; i++) {
+                arr.push(i);
+            }
         }
 
         return arr;
     }
 }
-
-export { Omok };

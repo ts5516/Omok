@@ -1,6 +1,7 @@
 import { Omok } from './omok';
 import * as Game from './omok_game_system';
 import * as readline from 'readline';
+import * as dotenv from 'dotenv';
 
 async function run(): Promise<void> {
     const omokGameObject = initGame();
@@ -14,7 +15,9 @@ function initGame(): {
     game: Game.OmokGameSystem;
     readLine: readline.Interface;
 } {
-    const omok = new Omok(4);
+    dotenv.config();
+
+    const omok = new Omok(Number(process.env.BOARD_SIZE));
     const game = new Game.OmokGameSystem();
     const readLine = readline.createInterface({
         input: process.stdin,
@@ -120,7 +123,7 @@ function gameRestartOrEnd(inputStr: string, omok: Omok, game: Game.OmokGameSyste
     if (inputStr === 'n') {
         game.state = Game.State.GAMEOVER;
     } else {
-        game.state = Game.State.GAMEPLAY;
+        game.initialize();
         omok.initialize(omok.board.length);
     }
 }
@@ -134,7 +137,7 @@ function gamePlayUpdate(inputStr: string, omok: Omok, game: Game.OmokGameSystem)
     const y = position[1];
 
     if (omok.canPutStoneOnBoard(x, y)) {
-        omok.putStoneOnBoard(x, y, game.owner);
+        omok.putStoneOnBoard(x, y);
         gameSystemUpdate(Game.PlayResult.SUCCESS, omok, game, x, y);
     } else {
         gameSystemUpdate(Game.PlayResult.FAIL, omok, game, x, y);
@@ -160,6 +163,7 @@ function gameSystemUpdate(
 
     if (game.result !== Game.PlayResult.FAIL) {
         game.flipOwner();
+        omok.flipStone();
     }
 }
 
